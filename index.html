@@ -366,7 +366,11 @@ let demoInterval = null;
 
 function startSong() {
   restartBtn.style.display = 'none';
-  runDemoLyrics();
+  lyricLine.textContent = 'Wait for magic...';
+  currentLyricIndex = -1;
+  setTimeout(() => {
+    runDemoLyrics();
+  }, 1500);
 }
 
 let currentLyricIndex = -1;
