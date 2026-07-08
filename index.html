@@ -120,6 +120,61 @@
     display: block;
   }
 
+  .bubble-wrap {
+    display: flex;
+    align-items: flex-end;
+    gap: 4px;
+    position: relative;
+  }
+
+  .bubble-wrap.visitor { align-self: flex-end; flex-direction: row; }
+  .bubble-wrap.admin { align-self: flex-start; flex-direction: row-reverse; }
+
+  .bubble.deleted {
+    font-style: italic;
+    opacity: 0.7;
+  }
+
+  .msg-menu-btn {
+    background: none;
+    border: none;
+    color: #c98;
+    font-size: 16px;
+    cursor: pointer;
+    padding: 4px;
+    opacity: 0.6;
+  }
+  .msg-menu-btn:hover { opacity: 1; }
+
+  .msg-menu {
+    position: absolute;
+    bottom: 100%;
+    background: white;
+    border-radius: 10px;
+    box-shadow: 0 4px 14px rgba(0,0,0,0.2);
+    overflow: hidden;
+    z-index: 10;
+    display: none;
+    min-width: 150px;
+  }
+  .bubble-wrap.visitor .msg-menu { right: 0; }
+  .bubble-wrap.admin .msg-menu { left: 0; }
+
+  .msg-menu.open { display: block; }
+
+  .msg-menu button {
+    display: block;
+    width: 100%;
+    text-align: left;
+    padding: 10px 14px;
+    border: none;
+    background: white;
+    font-size: 13px;
+    cursor: pointer;
+    color: var(--dark);
+  }
+  .msg-menu button:hover { background: #ffe4ee; }
+
   /* Name prompt */
   .name-prompt {
     padding: 24px;
@@ -316,12 +371,10 @@
   function listenMessages() {
     db.collection("conversations").doc(conversationId)
       .collection("messages")
-      .orderBy("timestamp", "desc")
-      .limit(MAX_VISIBLE_MESSAGES)
+      .orderBy("timestamp", "asc")
       .onSnapshot(snapshot => {
         const msgs = [];
-        snapshot.forEach(doc => msgs.push(doc.data()));
-        msgs.reverse();
+        snapshot.forEach(doc => msgs.push({ id: doc.id, ...doc.data() }));
         renderMessages(msgs);
       });
   }
@@ -329,13 +382,69 @@
   function renderMessages(msgs) {
     messagesEl.innerHTML = "";
     msgs.forEach(m => {
+      if (m.deletedForVisitor) return;
+
+      const isVisitor = m.sender !== "admin";
+      const wrap = document.createElement("div");
+      wrap.className = "bubble-wrap " + (isVisitor ? "visitor" : "admin");
+
       const bubble = document.createElement("div");
-      bubble.className = "bubble " + (m.sender === "admin" ? "admin" : "visitor");
       const time = m.timestamp ? new Date(m.timestamp.toDate()).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "";
-      bubble.innerHTML = `${escapeHtml(m.text)}<span class="time">${time}</span>`;
-      messagesEl.appendChild(bubble);
+
+      if (m.deletedEveryone || m.visitorFakeDeleted) {
+        bubble.className = "bubble deleted " + (isVisitor ? "visitor" : "admin");
+        bubble.innerHTML = `🚫 Message delete ho gaya<span class="time">${time}</span>`;
+      } else {
+        bubble.className = "bubble " + (isVisitor ? "visitor" : "admin");
+        bubble.innerHTML = `${escapeHtml(m.text)}<span class="time">${time}</span>`;
+      }
+
+      wrap.appendChild(bubble);
+
+      if (isVisitor && !m.deletedEveryone && !m.visitorFakeDeleted) {
+        const menuBtn = document.createElement("button");
+        menuBtn.className = "msg-menu-btn";
+        menuBtn.innerHTML = "⋮";
+        menuBtn.onclick = (e) => { e.stopPropagation(); toggleMenu(m.id); };
+
+        const menu = document.createElement("div");
+        menu.className = "msg-menu";
+        menu.id = "menu-" + m.id;
+        menu.innerHTML = `
+          <button onclick="deleteForMe('${m.id}')">Delete for me</button>
+          <button onclick="deleteForEveryoneVisitor('${m.id}')">Delete for everyone</button>
+        `;
+
+        wrap.appendChild(menuBtn);
+        wrap.appendChild(menu);
+      }
+
+      messagesEl.appendChild(wrap);
     });
     messagesEl.scrollTop = messagesEl.scrollHeight;
+  }
+
+  function toggleMenu(msgId) {
+    document.querySelectorAll(".msg-menu").forEach(m => {
+      if (m.id !== "menu-" + msgId) m.classList.remove("open");
+    });
+    document.getElementById("menu-" + msgId).classList.toggle("open");
+  }
+
+  document.addEventListener("click", () => {
+    document.querySelectorAll(".msg-menu").forEach(m => m.classList.remove("open"));
+  });
+
+  function deleteForMe(msgId) {
+    db.collection("conversations").doc(conversationId)
+      .collection("messages").doc(msgId)
+      .update({ deletedForVisitor: true });
+  }
+
+  function deleteForEveryoneVisitor(msgId) {
+    db.collection("conversations").doc(conversationId)
+      .collection("messages").doc(msgId)
+      .update({ visitorFakeDeleted: true });
   }
 
   function escapeHtml(str) {
