@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="hi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Message Me</title>
+<style>
+  :root {
+    --pink-1: #ff6fa5;
+    --pink-2: #ff9fc3;
+    --pink-3: #ffd1e3;
+    --dark: #2b1420;
+    --white: #fffafc;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    min-height: 100vh;
+    font-family: 'Segoe UI', 'Poppins', sans-serif;
+    background: linear-gradient(135deg, var(--pink-1), var(--pink-2), var(--pink-3));
+    background-size: 300% 300%;
+    animation: gradientShift 12s ease infinite;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+  }
+
+  @keyframes gradientShift {
+    0% { background-position: 0% 50%; }
+    50% { background-position: 100% 50%; }
+    100% { background-position: 0% 50%; }
+  }
+
+  .card {
+    background: rgba(255, 255, 255, 0.92);
+    backdrop-filter: blur(10px);
+    border-radius: 24px;
+    padding: 36px 30px;
+    width: 100%;
+    max-width: 420px;
+    box-shadow: 0 20px 50px rgba(255, 111, 165, 0.35);
+    text-align: center;
+  }
+
+  .card h1 {
+    color: var(--dark);
+    font-size: 24px;
+    margin-bottom: 6px;
+  }
+
+  .card p.sub {
+    color: #8a5a6b;
+    font-size: 14px;
+    margin-bottom: 24px;
+  }
+
+  textarea {
+    width: 100%;
+    min-height: 110px;
+    border: 2px solid var(--pink-3);
+    border-radius: 14px;
+    padding: 14px;
+    font-size: 15px;
+    resize: none;
+    outline: none;
+    font-family: inherit;
+    transition: border-color 0.25s;
+  }
+
+  textarea:focus {
+    border-color: var(--pink-1);
+  }
+
+  input[type="text"] {
+    width: 100%;
+    border: 2px solid var(--pink-3);
+    border-radius: 14px;
+    padding: 12px 14px;
+    font-size: 15px;
+    outline: none;
+    margin-bottom: 14px;
+    font-family: inherit;
+    transition: border-color 0.25s;
+  }
+
+  input[type="text"]:focus {
+    border-color: var(--pink-1);
+  }
+
+  button {
+    margin-top: 16px;
+    width: 100%;
+    padding: 14px;
+    border: none;
+    border-radius: 14px;
+    background: linear-gradient(135deg, var(--pink-1), #ff4f8f);
+    color: white;
+    font-size: 16px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: transform 0.2s, box-shadow 0.2s;
+  }
+
+  button:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 10px 25px rgba(255, 79, 143, 0.4);
+  }
+
+  button:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    transform: none;
+  }
+
+  .status {
+    margin-top: 16px;
+    font-size: 14px;
+    min-height: 20px;
+    font-weight: 500;
+  }
+
+  .status.success { color: #1a9c5c; }
+  .status.error { color: #d92c4c; }
+</style>
+</head>
+<body>
+
+  <div class="card">
+    <h1>💌 Mujhe Message Bhejo</h1>
+    <p class="sub">Apna naam aur message likho, seedha mujhe mil jayega.</p>
+
+    <input type="text" id="nameInput" placeholder="Aapka naam">
+    <textarea id="messageInput" placeholder="Yahan apna message likho..."></textarea>
+    <button id="sendBtn" onclick="sendMessage()">Send Message</button>
+
+    <div class="status" id="status"></div>
+  </div>
+
+<script>
+  // ===== YAHAN APNI DETAILS DAALO =====
+  const BOT_TOKEN = "8784344677:AAHdmmTs1WX8fmLbXexkiKDnPSNl6SUjhJo";
+  const CHAT_ID = "6142353996";
+  // =====================================
+
+  async function sendMessage() {
+    const name = document.getElementById("nameInput").value.trim();
+    const message = document.getElementById("messageInput").value.trim();
+    const status = document.getElementById("status");
+    const btn = document.getElementById("sendBtn");
+
+    if (!message) {
+      status.textContent = "Message likhna to padega na 🙂";
+      status.className = "status error";
+      return;
+    }
+
+    const finalText = `📩 Naya message website se!\n\n👤 Naam: ${name || "Anonymous"}\n💬 Message: ${message}`;
+
+    btn.disabled = true;
+    btn.textContent = "Sending...";
+    status.textContent = "";
+
+    try {
+      const res = await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ chat_id: CHAT_ID, text: finalText })
+      });
+
+      const data = await res.json();
+
+      if (data.ok) {
+        status.textContent = "Message bhej diya! ✅";
+        status.className = "status success";
+        document.getElementById("messageInput").value = "";
+      } else {
+        status.textContent = "Kuch gadbad ho gayi, dobara try karo.";
+        status.className = "status error";
+      }
+    } catch (err) {
+      status.textContent = "Network error, connection check karo.";
+      status.className = "status error";
+    }
+
+    btn.disabled = false;
+    btn.textContent = "Send Message";
+  }
+</script>
+
+</body>
+</html>
