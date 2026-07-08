@@ -141,6 +141,31 @@
   .bubble.visitor { align-self: flex-start; background: var(--grey-bubble); color: var(--dark); border-bottom-left-radius: 4px; }
   .bubble.admin { align-self: flex-end; background: linear-gradient(135deg, var(--pink-1), var(--pink-2)); color: white; border-bottom-right-radius: 4px; }
   .bubble .time { font-size: 10px; opacity: 0.7; margin-top: 4px; display: block; }
+  .bubble.deleted { font-style: italic; opacity: 0.7; }
+
+  .bubble-wrap { display: flex; align-items: flex-end; gap: 4px; position: relative; }
+  .bubble-wrap.visitor { align-self: flex-start; flex-direction: row-reverse; }
+  .bubble-wrap.admin { align-self: flex-end; flex-direction: row; }
+
+  .msg-menu-btn {
+    background: none; border: none; color: #c98; font-size: 16px;
+    cursor: pointer; padding: 4px; opacity: 0.6;
+  }
+  .msg-menu-btn:hover { opacity: 1; }
+
+  .msg-menu {
+    position: absolute; bottom: 100%; background: white; border-radius: 10px;
+    box-shadow: 0 4px 14px rgba(0,0,0,0.2); overflow: hidden; z-index: 10;
+    display: none; min-width: 150px;
+  }
+  .bubble-wrap.visitor .msg-menu { left: 0; }
+  .bubble-wrap.admin .msg-menu { right: 0; }
+  .msg-menu.open { display: block; }
+  .msg-menu button {
+    display: block; width: 100%; text-align: left; padding: 10px 14px;
+    border: none; background: white; font-size: 13px; cursor: pointer; color: var(--dark);
+  }
+  .msg-menu button:hover { background: #ffe4ee; }
 
   .reply-area {
     display: flex; padding: 14px; gap: 10px; background: white; border-top: 1px solid #f0dbe4;
@@ -292,16 +317,77 @@
         const msgsEl = document.getElementById("chatMessages");
         if (!msgsEl) return;
         msgsEl.innerHTML = "";
-        snapshot.forEach(doc => {
-          const m = doc.data();
+        snapshot.forEach(docSnap => {
+          const m = docSnap.data();
+          const msgId = docSnap.id;
+
+          // Admin ne khud "delete for me" kiya to bilkul hide
+          if (m.deletedForAdmin) return;
+
+          const isAdmin = m.sender === "admin";
+          const wrap = document.createElement("div");
+          wrap.className = "bubble-wrap " + (isAdmin ? "admin" : "visitor");
+
           const bubble = document.createElement("div");
-          bubble.className = "bubble " + (m.sender === "admin" ? "admin" : "visitor");
           const time = m.timestamp ? new Date(m.timestamp.toDate()).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "";
-          bubble.innerHTML = `${escapeHtml(m.text)}<span class="time">${time}</span>`;
-          msgsEl.appendChild(bubble);
+
+          // Admin hamesha real content dekhta hai — visitor ka "fake delete" yahan asar nahi karta
+          if (m.deletedEveryone) {
+            bubble.className = "bubble deleted " + (isAdmin ? "admin" : "visitor");
+            bubble.innerHTML = `🚫 Message delete ho gaya<span class="time">${time}</span>`;
+          } else {
+            bubble.className = "bubble " + (isAdmin ? "admin" : "visitor");
+            bubble.innerHTML = `${escapeHtml(m.text)}<span class="time">${time}</span>`;
+          }
+          wrap.appendChild(bubble);
+
+          if (!m.deletedEveryone) {
+            const menuBtn = document.createElement("button");
+            menuBtn.className = "msg-menu-btn";
+            menuBtn.innerHTML = "⋮";
+            menuBtn.onclick = (e) => { e.stopPropagation(); toggleMenu(msgId); };
+
+            const menu = document.createElement("div");
+            menu.className = "msg-menu";
+            menu.id = "menu-" + msgId;
+            menu.innerHTML = `
+              <button onclick="adminDeleteForMe('${msgId}')">Delete for me</button>
+              <button onclick="adminDeleteForEveryone('${msgId}')">Delete for everyone</button>
+            `;
+            wrap.appendChild(menuBtn);
+            wrap.appendChild(menu);
+          }
+
+          msgsEl.appendChild(wrap);
         });
         msgsEl.scrollTop = msgsEl.scrollHeight;
       });
+  }
+
+  function toggleMenu(msgId) {
+    document.querySelectorAll(".msg-menu").forEach(m => {
+      if (m.id !== "menu-" + msgId) m.classList.remove("open");
+    });
+    document.getElementById("menu-" + msgId).classList.toggle("open");
+  }
+
+  document.addEventListener("click", () => {
+    document.querySelectorAll(".msg-menu").forEach(m => m.classList.remove("open"));
+  });
+
+  function adminDeleteForMe(msgId) {
+    if (!activeConversationId) return;
+    db.collection("conversations").doc(activeConversationId)
+      .collection("messages").doc(msgId)
+      .update({ deletedForAdmin: true });
+  }
+
+  function adminDeleteForEveryone(msgId) {
+    // Real delete — dono taraf (visitor + admin) par asar hoga
+    if (!activeConversationId) return;
+    db.collection("conversations").doc(activeConversationId)
+      .collection("messages").doc(msgId)
+      .update({ deletedEveryone: true });
   }
 
   async function sendReply() {
